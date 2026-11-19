@@ -1,8 +1,10 @@
 package com.tyranor.next.core.settings
 
 import android.content.Context
+import com.tyranor.next.core.engine.EngineType
 import com.tyranor.next.core.game.model.GamePathUtils
 import com.tyranor.next.core.game.model.ScanGame
+import com.tyranor.runtime.systemnnn.SystemNnnHost
 
 /**
  * 三级设置解析器（P0-3）：读取应用级全局值与单游戏覆盖，交给 [EffectiveEngineSettings]
@@ -56,6 +58,7 @@ object EngineSettingsResolver {
         val removableStorage = gameDir?.let { GamePathUtils.isRemovableStoragePath(it) } == true
         val onsGlobal = EngineSettingsStore.loadOns(app)
         val onsOverride = PerGameSettingsStore.toOnsOverride(override.optJSONObject(PerGameSettingsStore.ONS_KEY))
+        val systemNnn = game.engine == EngineType.SYSTEMNNN
 
         return ResolvedEngineSettings(
             ons = EffectiveEngineSettings.mergeOns(onsGlobal, onsOverride),
@@ -158,6 +161,10 @@ object EngineSettingsResolver {
                 str(PerGameSettingsStore.F_WEB_SHELL_PORT),
                 EngineSettingsStore.getWebShellPort(app),
             ),
+            webExternalNetwork = EffectiveEngineSettings.resolveBool(
+                bool(PerGameSettingsStore.F_TY_EXTERNAL),
+                EngineSettingsStore.isTyranoExternalNetwork(app),
+            ),
             webScopedSaveDir = EffectiveEngineSettings.resolveBool(
                 bool(PerGameSettingsStore.F_TY_SCOPED),
                 EngineSettingsStore.isTyranoScopedSaveDir(app),
@@ -228,6 +235,23 @@ object EngineSettingsResolver {
                 EngineSettingsStore.getCmvsFont(app),
             ),
             cmvsFontFace = EngineSettingsStore.getCmvsFontFace(app),
+            systemNnnFullscreen = if (systemNnn) {
+                (override.opt(PerGameSettingsStore.F_SYSTEMNNN_FULLSCREEN) as? Boolean)
+                    ?: EngineSettingsStore.isSystemNnnFullscreen(app)
+            } else SystemNnnHost.DEFAULT_FULLSCREEN,
+            systemNnnReadingSize = if (systemNnn) {
+                str(PerGameSettingsStore.F_SYSTEMNNN_READING_SIZE)?.toIntOrNull()
+                    ?.takeIf { it in EngineSettingsStore.SYSTEMNNN_READING_SIZES }
+                    ?: EngineSettingsStore.getSystemNnnReadingSize(app)
+            } else SystemNnnHost.DEFAULT_READING_SIZE,
+            systemNnnExeAnalysis = if (systemNnn) {
+                (override.opt(PerGameSettingsStore.F_SYSTEMNNN_EXE_ANALYSIS) as? Boolean)
+                    ?: EngineSettingsStore.isSystemNnnExeAnalysisEnabled(app)
+            } else SystemNnnHost.DEFAULT_EXE_ANALYSIS,
+            systemNnnDebugMode = if (systemNnn) {
+                (override.opt(PerGameSettingsStore.F_SYSTEMNNN_DEBUG_MODE) as? Boolean)
+                    ?: EngineSettingsStore.isSystemNnnDebugMode(app)
+            } else SystemNnnHost.DEFAULT_DEBUG_MODE,
             fvpSystemFont = EffectiveEngineSettings.resolveBool(
                 bool(PerGameSettingsStore.F_FVP_SYSTEM_FONT),
                 EngineSettingsStore.isFvpSystemFont(app),
@@ -298,6 +322,10 @@ object EngineSettingsResolver {
                 EngineSettingsStore.loadRuffle(app),
                 PerGameSettingsStore.toRuffleOverride(override),
             ),
+            impacto = EffectiveEngineSettings.mergeImpacto(
+                EngineSettingsStore.loadImpacto(app),
+                PerGameSettingsStore.toImpactoOverride(override),
+            ),
             winlator = run {
                 val global = EngineSettingsStore.loadWinlator(app)
                 // 模式推断复用本函数已加载的覆盖 JSON，避免 getWinlatorMode 再走一次阻塞读。
@@ -346,6 +374,7 @@ data class ResolvedEngineSettings(
     /** Web 壳（Tyrano / WebOther / VN）本地 HTTP 服务端口（固定端口保证 WebView 存档域稳定）。 */
     val webShellPort: Int,
     val webScopedSaveDir: Boolean,
+    val webExternalNetwork: Boolean,
     val rpgMakerModEnabled: Boolean,
     val rpgLegacyRenderer: Boolean,
     /** MV/MZ 存档互通生效值（单游戏覆盖 > 全局）。合并值不区分引擎，消费方须以引擎类型门控。 */
@@ -401,6 +430,12 @@ data class ResolvedEngineSettings(
     val renpy: EngineSettingsStore.RenPy,
     /** Ruffle 外置模块生效配置（三级合并结果，启动时经 settings extra 下发）。 */
     val ruffle: EngineSettingsStore.Ruffle,
+    /** MAGES.（impacto）宿主生效配置（三级合并结果，启动时经 settings extra 下发）。 */
+    val impacto: EngineSettingsStore.Impacto,
     /** Winlator 外置启动下发参数（三级合并结果；跳转 YU-RIS / CatSystem2 / PC 时消费）。 */
     val winlator: EngineSettingsStore.Winlator,
+    val systemNnnFullscreen: Boolean = SystemNnnHost.DEFAULT_FULLSCREEN,
+    val systemNnnReadingSize: Int = SystemNnnHost.DEFAULT_READING_SIZE,
+    val systemNnnExeAnalysis: Boolean = SystemNnnHost.DEFAULT_EXE_ANALYSIS,
+    val systemNnnDebugMode: Boolean = SystemNnnHost.DEFAULT_DEBUG_MODE,
 )
